@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 95vh;
+        }
+
+        #chat-box {
+            width: 80%;
+            max-width: 600px;
+            height: 400px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        #input-container {
+            width: 80%;
+            max-width: 600px;
+            display: flex;
+            gap: 10px;
+        }
+
+        #user-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+        }
+
+        button {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+        }
+
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+
+        .ai-error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .user-message {
+            color: #007bff;
+        }
+
+        .ai-message {
+            color: #333;
+        }
+    </style>
+</head>
+
+<body>
+        <h1>AI Chat Assistant</h1>
+        <div id="chat-box"></div>
+
+        <div id="input-container">
+                <input type="text" id="user-input" placeholder="Escribe un mensaje..." />
+                <button id="send-button" onclick="sendMessage()">Enviar</button>
+            </div>
+       
+       
+    <script>
+        async function sendMessage() {
+            let inputField = document.getElementById("user-input");
+            let chatBox = document.getElementById("chat-box");
+            let sendButton = document.getElementById("send-button");
+
+            let userMessage = inputField.value.trim();
+            if (userMessage === "") return;
+
+            // 1. Muestra el mensaje del usuario y limpia la entrada
+            chatBox.innerHTML += `<p class="user-message"><strong>Tú:</strong> ${userMessage}</p>`;
+            inputField.value = "";
+
+            // 2. Muestra indicador de carga y deshabilita UI
+            chatBox.innerHTML += `<p id="loading-indicator" class="ai-message"><strong>IA:</strong> <span style="font-style: italic; color: gray;">Pensando...</span></p>`;
+            chatBox.scrollTop = chatBox.scrollHeight;
+            inputField.disabled = true;
+            sendButton.disabled = true;
+
+            let response;
+
+            try {
+                // 3. Llama al endpoint /chat de FastAPI
+                response = await fetch(`/chat?prompt=${encodeURIComponent(userMessage)}`, {
+                    method: "POST"
+                });
+
+                // 4. Elimina el indicador de carga
+                const loadingIndicator = document.getElementById("loading-indicator");
+                if (loadingIndicator) loadingIndicator.remove();
+
+                if (!response.ok) {
+                    // 5. Manejo de ERRORES: Intenta leer el JSON de error de FastAPI
+                    const errorData = await response.json().catch(() => ({
+                        detail: `Error ${response.status} del servidor (FastAPI). No se pudo leer la respuesta de error.`
+                    }));
+
+                    // Muestra el mensaje de error de 'detail' que enviaste desde app.py
+                    chatBox.innerHTML += `<p class="ai-error"><strong>IA:</strong> ${errorData.detail || 'Error desconocido.'}</p>`;
+
+                } else {
+                    // 6. Respuesta EXITOSA (HTTP 200)
+                    let data = await response.json();
+                    chatBox.innerHTML += `<p class="ai-message"><strong>IA:</strong> ${data.response}</p>`;
+                }
+
+            } catch (e) {
+                // 7. Manejo de ERRORES DE RED (FastAPI no responde)
+                const loadingIndicator = document.getElementById("loading-indicator");
+                if (loadingIndicator) loadingIndicator.remove();
+
+                chatBox.innerHTML += `<p class="ai-error"><strong>IA:</strong> ERROR CRÍTICO DE RED. El servidor de FastAPI no está corriendo o no es accesible. (${e.message})</p>`;
+            } finally {
+                // 8. Restauración de UI
+                inputField.disabled = false;
+                sendButton.disabled = false;
+                chatBox.scrollTop = chatBox.scrollHeight;
+                inputField.focus();
+            }
+        }
+
+        // Evento para enviar al presionar Enter
+        document.getElementById("user-input").addEventListener("keypress", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+
+</html>
